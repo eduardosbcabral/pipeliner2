@@ -24,20 +24,20 @@ namespace PipelineR
 
         public string RequestHandlerId { get;  set; }
 
-        public IReadOnlyCollection<ErrorResult> Errors { private set; get; }
+        public IList<ErrorResult> Errors { private set; get; }
 
         public int StatusCode { get;  set; }
 
         public void SetStatusCode(int statusCode) => this.StatusCode = statusCode;
 
-        public RequestHandlerResult(IReadOnlyCollection<ErrorResult> errors, int statusCode)
+        public RequestHandlerResult(IList<ErrorResult> errors, int statusCode)
         {
             this.Errors = errors;
             this.Success = false;
             this.StatusCode = statusCode;
         }
 
-        public RequestHandlerResult(IReadOnlyCollection<ErrorResult> errors) : this(errors, 0)
+        public RequestHandlerResult(IList<ErrorResult> errors) : this(errors, 0)
         {
         }
 

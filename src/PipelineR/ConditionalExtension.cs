@@ -1,20 +1,18 @@
 ﻿using System;
-using System.Linq.Expressions;
 
 namespace PipelineR
 {
     public static class ConditionalExtension
     {
-        public static bool IsSatisfied<TContext, TRequest>(this Expression<Func<TContext, TRequest, bool>> condition, TContext context, TRequest request)
+        public static bool IsSatisfied<TContext>(this Func<TContext, bool> condition, TContext context)
         {
-            var compiledExpression = condition.Compile();
-            return compiledExpression(context, request);
+            return condition.Invoke(context);
         }
 
-        public static IRequestHandler<TContext, TRequest> When<TContext, TRequest>(
-            this IRequestHandler<TContext, TRequest> requestHandler, Expression<Func<TContext, TRequest, bool>> condition) where TContext : BaseContext
+        public static IRequestHandler<TContext> When<TContext>(
+            this IRequestHandler<TContext> requestHandler, Func<TContext, bool> condition) where TContext : BaseContext
         {
-            ((RequestHandler<TContext, TRequest>) requestHandler).Condition = condition;
+            ((RequestHandler<TContext>)requestHandler).Condition = condition;
             return requestHandler;
         }
     }

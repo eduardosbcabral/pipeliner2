@@ -1,119 +1,98 @@
 ﻿using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Polly;
+using Serilog;
+using Serilog.Context;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
-using Polly;
-using Serilog;
-using Serilog.Context;
 
 namespace PipelineR
 {
-    public class Pipeline<TContext, TRequest> : IPipeline<TContext, TRequest> where TContext : BaseContext
+    public class Pipeline<TContext> : IPipeline<TContext> where TContext : BaseContext
     {
-        private IRequestHandler<TContext, TRequest> _requestHandler;
-        private readonly ICacheProvider _cacheProvider;
-        private RequestHandler<TContext, TRequest> _lastRequestHandlerAdd;
-        private IRequestHandler<TContext, TRequest> _finallyRequestHandler;
-        private IValidator<TRequest> _validator;
         private readonly IServiceProvider _serviceProvider;
-        private readonly Stack<RollbackHandler<TContext, TRequest>> _rollbacks;
-        private IHandler<TContext, TRequest> _lastHandlerAdd;
+        private readonly ICacheProvider _cacheProvider;
+
+        private IValidator _validator;
+
+        private IRequestHandler<TContext> _requestHandler;
+        private IRequestHandler<TContext> _finallyRequestHandler;
+        private IRequestHandler<TContext> _lastRequestHandlerAdd;
+
+        private IHandler<TContext> _lastHandlerAdd;
+
+        private readonly Stack<RollbackHandler<TContext>> _rollbacks;
+        private readonly string _requestKey;
         private bool _useReuseRequisitionHash;
-        private string _requestKey;
 
-        #region Constructores
-
-        private Pipeline(IServiceProvider serviceProvider, string requestKey = null) : this()
+        public Pipeline(string requestKey = null) : this()
         {
-            this._serviceProvider = serviceProvider;
+            // AUTO INJECT
+            //this._serviceProvider = serviceProvider;
             this._requestKey = requestKey;
-            _cacheProvider = serviceProvider.GetService<ICacheProvider>();
+            //this._cacheProvider = serviceProvider.GetService<ICacheProvider>();
         }
 
         public Pipeline()
         {
-            _rollbacks = new Stack<RollbackHandler<TContext, TRequest>>();
+            _rollbacks = new Stack<RollbackHandler<TContext>>();
         }
 
-        #endregion
-
-        #region Configure
-        public static Pipeline<TContext, TRequest> Configure()
-        {
-            return new Pipeline<TContext, TRequest>();
-        }
-
-        public static Pipeline<TContext, TRequest> Configure(IServiceProvider serviceProvider, string requestKey=null)
-        {
-            return new Pipeline<TContext, TRequest>(serviceProvider, requestKey);
-        }
-
-        public Pipeline<TContext, TRequest> UseRecoveryRequestByHash()
+        public IPipeline<TContext> UseRecoveryRequestByHash()
         {
             _useReuseRequisitionHash = true;
             return this;
         }
-        #endregion
 
-        #region AddNext
+        public IPipeline<TContext> AddNext<TRequestHandler>()
+        {
+            var requestHandler = (IRequestHandler<TContext>)this._serviceProvider.GetService<TRequestHandler>();
+            return this.AddNext(requestHandler);
+        }
 
-        public Pipeline<TContext, TRequest> AddNext(RequestHandler<TContext, TRequest> requestHandler)
+        public IPipeline<TContext> AddNext(IRequestHandler<TContext> requestHandler)
         {
             if (this._requestHandler == null)
-            {
                 this._requestHandler = requestHandler;
-            }
             else
-            {
                 GetLastRequestHandler(this._requestHandler).NextRequestHandler = requestHandler;
-            }
 
             _lastRequestHandlerAdd = requestHandler;
             _lastHandlerAdd = requestHandler;
             return this;
         }
 
-        public Pipeline<TContext, TRequest> AddNext<TRequestHandler>(
-            Expression<Func<TContext, TRequest, bool>> condition)
+        public IPipeline<TContext> AddNext<TRequestHandler>(Func<TContext, bool> condition)
             => this.AddNext<TRequestHandler>(condition, null);
 
-
-        public Pipeline<TContext, TRequest> AddNext<TRequestHandler>(
-            Expression<Func<TContext, TRequest, bool>> condition, Policy policy)
+        public IPipeline<TContext> AddNext<TRequestHandler>(Func<TContext, bool> condition, Policy policy)
         {
-            var requestHandler = ((RequestHandler<TContext, TRequest>)(IRequestHandler<TContext, TRequest>)_serviceProvider.GetService<TRequestHandler>());
+            var requestHandler = ((RequestHandler<TContext>)(IRequestHandler<TContext>)_serviceProvider.GetService<TRequestHandler>());
 
             requestHandler.Condition = condition;
             requestHandler.Policy = policy;
-            requestHandler.AddPipeline(this);
+            //requestHandler.AddPipeline(this);
 
-            return this.AddNext((RequestHandler<TContext, TRequest>)requestHandler);
+            return this.AddNext((RequestHandler<TContext>)requestHandler);
         }
 
-        public Pipeline<TContext, TRequest> AddNext<TRequestHandler>() => AddNext<TRequestHandler>(null);
-
-
-        #endregion
-
-        #region  AddCondition
-
-        public Pipeline<TContext, TRequest> When(Expression<Func<TContext, TRequest, bool>> condition)
+        public IPipeline<TContext> When(Expression<Func<TContext, bool>> condition)
         {
             if (condition != null && this._lastHandlerAdd != null)
-            {
-                this._lastHandlerAdd.Condition = condition;
-            }
+                this._lastHandlerAdd.Condition = condition.Compile();
 
             return this;
         }
 
-        #endregion
+        public IPipeline<TContext> When<TCondition>()
+        {
+            var instance = (ICondition<TContext>)this._serviceProvider.GetService<TCondition>();
+            return When(instance.When());
+        }
 
-        #region AddPolicy
-
-        public Pipeline<TContext, TRequest> WithPolicy(Policy policy)
+        public IPipeline<TContext> WithPolicy(Policy policy)
         {
             if (policy != null && this._lastHandlerAdd != null)
             {
@@ -122,7 +101,8 @@ namespace PipelineR
 
             return this;
         }
-        public Pipeline<TContext, TRequest> WithPolicy(Policy<RequestHandlerResult> policy)
+
+        public IPipeline<TContext> WithPolicy(Policy<RequestHandlerResult> policy)
         {
             if (policy != null && this._lastHandlerAdd != null)
             {
@@ -131,78 +111,66 @@ namespace PipelineR
 
             return this;
         }
-        #endregion
 
-        #region AddRollback
+        //public IPipeline<TContext> Rollback(IRollbackHandler<TContext> rollbackHandler)
+        //{
+        //    var rollbackHandlerAux = (RollbackHandler<TContext, TRequest>)rollbackHandler;
 
-        public Pipeline<TContext, TRequest> Rollback(IRollbackHandler<TContext, TRequest> rollbackHandler)
-        {
+        //    _lastHandlerAdd = rollbackHandler;
 
-            var rollbackHandlerAux = (RollbackHandler<TContext, TRequest>)rollbackHandler;
+        //    _rollbacks.Push(rollbackHandlerAux);
 
-            _lastHandlerAdd = rollbackHandler;
+        //    var rollbackIndex = _rollbacks.Count;
 
-            _rollbacks.Push(rollbackHandlerAux);
+        //    rollbackHandlerAux.AddRollbackIndex(rollbackIndex);
+        //    rollbackHandlerAux.RequestCondition = this._lastRequestHandlerAdd.Condition;
 
-            var rollbackIndex = _rollbacks.Count;
+        //    this._lastRequestHandlerAdd.AddRollbackIndex(rollbackIndex);
 
-            rollbackHandlerAux.AddRollbackIndex(rollbackIndex);
-            rollbackHandlerAux.RequestCondition = this._lastRequestHandlerAdd.Condition;
+        //    return this;
+        //}
 
-            this._lastRequestHandlerAdd.AddRollbackIndex(rollbackIndex);
+        //public IPipeline<TContext> Rollback<TRollbackHandler>() where TRollbackHandler : IRollbackHandler<TContext>
+        //{
+        //    var rollbackHandler = (IRollbackHandler<TContext>)_serviceProvider.GetService<TRollbackHandler>();
+        //    this.Rollback(rollbackHandler);
+        //    return this;
+        //}
 
-            return this;
-        }
-
-        public Pipeline<TContext, TRequest> Rollback<TRollbackHandler>() where TRollbackHandler : IRollbackHandler<TContext, TRequest>
-        {
-            var rollbackHandler = (IRollbackHandler<TContext, TRequest>)_serviceProvider.GetService<TRollbackHandler>();
-            this.Rollback(rollbackHandler);
-            return this;
-        }
-        #endregion
-
-        #region AddFinally
-        public Pipeline<TContext, TRequest> AddFinally(IRequestHandler<TContext, TRequest> requestHandler)
+        public IPipeline<TContext> AddFinally(IRequestHandler<TContext> requestHandler)
         {
             _finallyRequestHandler = requestHandler;
-            _lastRequestHandlerAdd = (RequestHandler<TContext, TRequest>)requestHandler;
+            _lastRequestHandlerAdd = (RequestHandler<TContext>)requestHandler;
             return this;
         }
 
-        public Pipeline<TContext, TRequest> AddFinally<TRequestHandler>() => AddFinally<TRequestHandler>(null);
+        public IPipeline<TContext> AddFinally<TRequestHandler>() => AddFinally<TRequestHandler>(null);
 
-
-        public Pipeline<TContext, TRequest> AddFinally<TRequestHandler>(Policy policy)
+        public IPipeline<TContext> AddFinally<TRequestHandler>(Policy policy)
         {
-            var requestHandler = (IRequestHandler<TContext, TRequest>)_serviceProvider.GetService<TRequestHandler>();
+            var requestHandler = (IRequestHandler<TContext>)_serviceProvider.GetService<TRequestHandler>();
             requestHandler.Policy = policy;
             return this.AddFinally(requestHandler);
         }
 
-        #endregion
-
-        #region AddValidator
-
-        public Pipeline<TContext, TRequest> AddValidator(IValidator<TRequest> validator)
+        public IPipeline<TContext> AddValidator<TRequest>(IValidator<TRequest> validator) where TRequest : class
         {
             _validator = validator;
             return this;
         }
 
-        public Pipeline<TContext, TRequest> AddValidator<TValidator>()
+        public IPipeline<TContext> AddValidator<TRequest>() where TRequest : class
         {
-            var validator = (IValidator<TRequest>)_serviceProvider.GetService<TValidator>();
+            var validator = (IValidator<TRequest>)_serviceProvider.GetService<TRequest>();
             return this.AddValidator(validator);
         }
 
-        #endregion
+        public RequestHandlerResult Execute<TRequest>(TRequest request) where TRequest : class
+        {
+            return Execute(request, string.Empty);
+        }
 
-
-
-        public RequestHandlerResult Execute(TRequest request) => Execute(request, string.Empty);
-
-        public RequestHandlerResult Execute(TRequest request, string idempotencyKey)
+        public RequestHandlerResult Execute<TRequest>(TRequest request, string idempotencyKey) where TRequest : class
         {
             if (this._validator != null)
             {
@@ -248,14 +216,12 @@ namespace PipelineR
                         this._requestHandler.UpdateContext(context);
                     }
                 }
-
             }
 
             lastRequestHandlerId = Execute(request, nextRequestHandlerId, ref result);
 
             if (this._useReuseRequisitionHash)
             {
-
                 var sucess = result?.IsSuccess() ?? false;
                 var snapshot = new PipelineSnapshot(sucess,
                     lastRequestHandlerId,
@@ -266,7 +232,7 @@ namespace PipelineR
             return result;
         }
 
-        private string Execute(TRequest request, string nextRequestHandlerId, ref RequestHandlerResult result)
+        private string Execute<TRequest>(TRequest request, string nextRequestHandlerId, ref RequestHandlerResult result)
         {
             string lastRequestHandlerId;
             try
@@ -274,7 +240,7 @@ namespace PipelineR
                 this._requestHandler.Context.Request = request;
 
                 result = RequestHandlerOrchestrator
-                    .ExecuteHandler(request, (RequestHandler<TContext, TRequest>)this._requestHandler, nextRequestHandlerId);
+                    .ExecuteHandler((RequestHandler<TContext>)this._requestHandler, nextRequestHandlerId);
             }
             catch (PipelinePolicyException px)
             {
@@ -284,7 +250,6 @@ namespace PipelineR
             {
                 if (Log.Logger != null)
                 {
-
                     using (LogContext.PushProperty("RequestKey", this._requestKey))
                     {
                         Log.Logger.Error(ex, string.Concat("Error - ", this._requestHandler.Context.CurrentRequestHandleId));
@@ -294,50 +259,40 @@ namespace PipelineR
             finally
             {
                 lastRequestHandlerId = this._requestHandler.Context.CurrentRequestHandleId;
-                result = ExecuteFinallyHandler(request) ?? result;
+                result = ExecuteFinallyHandler() ?? result;
             }
 
             return lastRequestHandlerId;
         }
 
-        private RequestHandlerResult ExecuteFinallyHandler(TRequest request)
+        private RequestHandlerResult ExecuteFinallyHandler()
         {
             RequestHandlerResult result = null;
 
             if (this._finallyRequestHandler != null)
             {
-                result = ((RequestHandler<TContext, TRequest>)this._finallyRequestHandler).Execute(request);
+                result = ((RequestHandler<TContext>)this._finallyRequestHandler).Execute();
             }
 
             return result;
         }
 
-        private static IRequestHandler<TContext, TRequest> GetLastRequestHandler(
-            IRequestHandler<TContext, TRequest> requestHandler)
+        private static IRequestHandler<TContext> GetLastRequestHandler(IRequestHandler<TContext> requestHandler)
         {
             if (requestHandler.NextRequestHandler != null)
             {
                 return GetLastRequestHandler(requestHandler.NextRequestHandler);
             }
 
-
             return requestHandler;
         }
 
-        internal void ExecuteRollback(int rollbackIndex, TRequest request)
+        internal void ExecuteRollback(int rollbackIndex)
         {
-            foreach (var rollbackHandler in this._rollbacks.Where(rollbackHandler => rollbackHandler.Index <= rollbackIndex))
-            {
-                rollbackHandler.Execute(request);
-            }
-        }
-
-
-    }
-
-    public interface IPipeline<TContext, in TRequest> where TContext : BaseContext
-    {
-        RequestHandlerResult Execute(TRequest request, string idempotencyKey);
-        RequestHandlerResult Execute(TRequest request);
+            //foreach (var rollbackHandler in this._rollbacks.Where(rollbackHandler => rollbackHandler.Index <= rollbackIndex))
+            //{
+            //    rollbackHandler.Execute(request);
+            //}
+        }        
     }
 }

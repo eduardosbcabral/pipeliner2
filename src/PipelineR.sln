@@ -9,6 +9,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PipelineR.Sample", "Pipelin
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PipelineR", "PipelineR\PipelineR.csproj", "{29CE6F96-8F31-4AAF-9740-13EDA9C33877}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PipelineR.StartingSample", "PipelineR.StartingSample\PipelineR.StartingSample.csproj", "{7623ACDA-33AC-495F-8EC4-9CADEB6BDF16}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "DiagramBuilder", "..\..\DiagramBuilder\DiagramBuilder\DiagramBuilder.csproj", "{7CC0F553-3645-4135-80A1-D2E1E957B892}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -27,6 +31,14 @@ Global
 		{29CE6F96-8F31-4AAF-9740-13EDA9C33877}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{29CE6F96-8F31-4AAF-9740-13EDA9C33877}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{29CE6F96-8F31-4AAF-9740-13EDA9C33877}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7623ACDA-33AC-495F-8EC4-9CADEB6BDF16}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7623ACDA-33AC-495F-8EC4-9CADEB6BDF16}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7623ACDA-33AC-495F-8EC4-9CADEB6BDF16}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7623ACDA-33AC-495F-8EC4-9CADEB6BDF16}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7CC0F553-3645-4135-80A1-D2E1E957B892}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7CC0F553-3645-4135-80A1-D2E1E957B892}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7CC0F553-3645-4135-80A1-D2E1E957B892}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7CC0F553-3645-4135-80A1-D2E1E957B892}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

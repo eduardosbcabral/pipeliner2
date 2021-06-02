@@ -1,43 +1,30 @@
-﻿using System;
-using System.Linq.Expressions;
-using Polly;
+﻿using Polly;
+using System;
 
 namespace PipelineR
 {
-    public abstract class RequestHandler<TContext, TRequest> : IRequestHandler<TContext, TRequest>
-        where TContext : BaseContext
+    public abstract class RequestHandler<TContext> : IRequestHandler<TContext> where TContext : BaseContext
     {
-
-
-        #region  Constructores
         protected RequestHandler(TContext context)
         {
             this.Context = context;
         }
 
-        protected RequestHandler(TContext context, Expression<Func<TContext, TRequest, bool>> condition) : this(context)
+        protected RequestHandler(TContext context, Func<TContext, bool> condition) : this(context)
         {
             this.Condition = condition;
         }
 
-        #endregion
+        public TContext Context { get; private set; }
+        public Func<TContext, bool> Condition { get; set; }
+        public IRequestHandler<TContext> NextRequestHandler { get; set; }
 
-        #region  Properties
-        public Expression<Func<TContext, TRequest, bool>> Condition { get; set; }
-        public IRequestHandler<TContext, TRequest> NextRequestHandler { get; set; }
         public Policy Policy { get; set; }
         public Policy<RequestHandlerResult> PolicyRequestHandler { get; set; }
 
-        private Pipeline<TContext, TRequest> _pipeline;
-        public TContext Context { get; private set; }
-
-        private int _rollbackIndex;
-
-        private TRequest _request;
-
-        #endregion
-
-        #region Exit Pipeline
+        //private int _rollbackIndex;
+        //private Pipeline<TContext> _pipeline;
+        //private TRequest _request;
 
         protected RequestHandlerResult Abort(string errorMessage, int statusCode)
             => this.Context.Response = new RequestHandlerResult(errorMessage, statusCode, false)
@@ -58,68 +45,60 @@ namespace PipelineR
         protected RequestHandlerResult Abort(ErrorResult errorResult, int statusCode)
             => this.Context.Response = new RequestHandlerResult(errorResult, statusCode)
               .WithRequestHandlerId(this.RequestHandleId());
+
         protected RequestHandlerResult Abort(ErrorResult errorResult)
             => this.Context.Response = new RequestHandlerResult(errorResult, 0)
               .WithRequestHandlerId(this.RequestHandleId());
+
         protected RequestHandlerResult Finish(object result, int statusCode)
             => this.Context.Response = new RequestHandlerResult(result, statusCode, true)
               .WithRequestHandlerId(this.RequestHandleId());
+
         protected RequestHandlerResult Finish(object result)
             => this.Context.Response = new RequestHandlerResult(result, 0, true)
               .WithRequestHandlerId(this.RequestHandleId());
 
-        protected RequestHandlerResult Rollback(RequestHandlerResult result)
-        {
-            this.Context.Response = result;
+        public abstract RequestHandlerResult HandleRequest();
 
-            this._pipeline.ExecuteRollback(this._rollbackIndex, this._request);
-
-            return result;
-        }
-
-
-        #endregion
-
-        #region Methods
         public RequestHandlerResult Next() => Next(string.Empty);
-
-
         public RequestHandlerResult Next(string requestHandlerId)
         {
-            var request = (TRequest)this.Context.Request;
-
             if (this.NextRequestHandler != null)
-            {
-                this.Context.Response = RequestHandlerOrchestrator.ExecuteHandler(request, (RequestHandler<TContext, TRequest>)this.NextRequestHandler, requestHandlerId);
-            }
+                this.Context.Response = RequestHandlerOrchestrator.ExecuteHandler((RequestHandler<TContext>)this.NextRequestHandler, requestHandlerId);
 
             return this.Context.Response;
-
         }
-        public abstract RequestHandlerResult HandleRequest(TRequest request);
-
-        internal RequestHandlerResult Execute(TRequest request)
+        public string RequestHandleId()
         {
-            _request = request;
+            return this.GetType().Name;
+        }
+        public void UpdateContext(TContext context)
+        {
+            context.ConvertTo(this.Context);
+        }
+
+        internal RequestHandlerResult Execute()
+        {
+            //_request = request;
             RequestHandlerResult result = null;
 
             if (this.Policy != null)
             {
                 this.Policy.Execute(() =>
                 {
-                    result = HandleRequest(request);
+                    result = HandleRequest();
                 });
             }
             else if (this.PolicyRequestHandler != null)
             {
                 result = this.PolicyRequestHandler.Execute(() =>
                 {
-                    if (this.Context.Response != null && this.Context.Response.IsSuccess()==false && this.Context.Response.RequestHandlerId != this.RequestHandleId())
+                    if (this.Context.Response != null && this.Context.Response.IsSuccess() == false && this.Context.Response.RequestHandlerId != this.RequestHandleId())
                     {
                         throw new PipelinePolicyException(this.Context.Response);
                     }
 
-                    return HandleRequest(request);
+                    return HandleRequest();
                 });
 
                 if (result.IsSuccess() == false)
@@ -129,37 +108,24 @@ namespace PipelineR
             }
             else
             {
-                result = HandleRequest(request);
+                result = HandleRequest();
             }
 
             return result;
         }
 
-        public void AddRollbackIndex(int rollbackIndex) => this._rollbackIndex = rollbackIndex;
+        //protected RequestHandlerResult Rollback(RequestHandlerResult result)
+        //{
+        //    this.Context.Response = result;
 
-        public void AddPipeline(Pipeline<TContext, TRequest> pipeline) => this._pipeline = pipeline;
+        //    this._pipeline.ExecuteRollback(this._rollbackIndex);
 
-        public string RequestHandleId()
-        {
-            return this.GetType().Name;
-        }
+        //    return result;
+        //}
 
-        public void UpdateContext(TContext context)
-        {
-            context.ConvertTo(this.Context);
-        }
+        //public void AddRollbackIndex(int rollbackIndex) => this._rollbackIndex = rollbackIndex;
 
-        #endregion
 
+        //public void AddPipeline(Pipeline<TContext> pipeline) => this._pipeline = pipeline;
     }
-
-    public interface IRequestHandler<TContext, TRequest> : IHandler<TContext, TRequest> where TContext : BaseContext
-    {
-        RequestHandlerResult HandleRequest(TRequest request);
-        IRequestHandler<TContext, TRequest> NextRequestHandler { get; set; }
-        string RequestHandleId();
-        Policy<RequestHandlerResult> PolicyRequestHandler { set; get; }
-    }
-
-
 }

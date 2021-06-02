@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace PipelineR
+﻿namespace PipelineR
 {
-    public interface IPipelineBuilder<TContext, in TRequest> where TContext : BaseContext
+    public interface IPipelineBuilder<TContext> where TContext : BaseContext
     {
-        IPipeline<TContext, TRequest> Create();
+        IPipelineStarting<TContext> Pipeline { get; }
     }
 }
