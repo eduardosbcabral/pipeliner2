@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Net;
 
 namespace PipelineR
 {
@@ -176,11 +177,16 @@ namespace PipelineR
             {
                 var validateResult = this._validator.Validate(request);
 
-                if (validateResult.IsValid == false)
+                if (!validateResult.IsValid)
                 {
-                    var errors = (validateResult.Errors.Select(p =>
-                        new ErrorResult(null, p.ErrorMessage, p.PropertyName))).ToList();
-                    return new RequestHandlerResult(errors, 400);
+                    var errors = validateResult.Errors
+                        .Select(p => new ErrorResult(null, p.ErrorMessage, p.PropertyName))
+                        .ToArray();
+
+                    return RequestHandlerResultBuilder.Instance()
+                        .WithErrors(errors)
+                        .WithHttpStatusCode(HttpStatusCode.BadRequest)
+                        .Build();
                 }
             }
 
@@ -252,13 +258,13 @@ namespace PipelineR
                 {
                     using (LogContext.PushProperty("RequestKey", this._requestKey))
                     {
-                        Log.Logger.Error(ex, string.Concat("Error - ", this._requestHandler.Context.CurrentRequestHandleId));
+                        Log.Logger.Error(ex, string.Concat("Error - ", this._requestHandler.Context.CurrentRequestHandlerId));
                     }
                 }
             }
             finally
             {
-                lastRequestHandlerId = this._requestHandler.Context.CurrentRequestHandleId;
+                lastRequestHandlerId = this._requestHandler.Context.CurrentRequestHandlerId;
                 result = ExecuteFinallyHandler() ?? result;
             }
 

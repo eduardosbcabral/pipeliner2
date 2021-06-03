@@ -7,7 +7,7 @@ namespace PipelineR
         IRequestHandler<TPipelineContext> NextRequestHandler { get; set; }
         Policy<RequestHandlerResult> PolicyRequestHandler { set; get; }
 
-        string RequestHandleId();
+        string RequestHandlerId();
 
         RequestHandlerResult HandleRequest();
     }

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using WebApi.Models.Response;
 
@@ -7,98 +8,44 @@ namespace PipelineR
     public class RequestHandlerResult
     {
         public RequestHandlerResult()
-        {
-
-        }
-
-        public  RequestHandlerResult WithRequestHandlerId(string requestHandlerId)
-        {
-            this.RequestHandlerId = requestHandlerId;
-
-            return this;
-        }
+        { }
 
         public bool Success { get; private set; }
 
-        public object ResultObject { get;private set; }
+        public object ResultObject { get; private set; }
 
-        public string RequestHandlerId { get;  set; }
+        public string RequestHandlerId { get; set; }
 
-        public IList<ErrorResult> Errors { private set; get; }
+        public IList<ErrorResult> Errors { get; private set; }
 
-        public int StatusCode { get;  set; }
-
-        public void SetStatusCode(int statusCode) => this.StatusCode = statusCode;
-
-        public RequestHandlerResult(IList<ErrorResult> errors, int statusCode)
-        {
-            this.Errors = errors;
-            this.Success = false;
-            this.StatusCode = statusCode;
-        }
-
-        public RequestHandlerResult(IList<ErrorResult> errors) : this(errors, 0)
-        {
-        }
-
-        public RequestHandlerResult(ErrorResult errorResult, int statusCode)
-        {
-            this.Errors = new List<ErrorResult> { errorResult };
-            this.Success = false;
-            this.StatusCode = statusCode;
-        }
-
-        public RequestHandlerResult(ErrorResult errorResult, HttpStatusCode statusCode)
-        {
-            this.Errors = new List<ErrorResult> { errorResult };
-            this.Success = false;
-            this.StatusCode = (int)statusCode;
-        }
-
-        public RequestHandlerResult(object result, int statusCode, bool isSuccessful)
-        {
-            this.ResultObject = result;
-            this.Success = isSuccessful;
-            this.StatusCode = statusCode;
-        }
-
-        public RequestHandlerResult(object result, HttpStatusCode statusCode, bool isSuccessful)
-        {
-            this.ResultObject = result;
-            this.Success = isSuccessful;
-            this.StatusCode = (int)statusCode;
-        }
-
-        public RequestHandlerResult(ErrorItemResponse error, HttpStatusCode statusCode = HttpStatusCode.BadRequest)
-        {
-            this.ResultObject = new ErrorsResponse { Errors = new List<ErrorItemResponse> { error } };
-            this.Success = false;
-            this.StatusCode = (int)statusCode;
-        }
-
-        public RequestHandlerResult(ErrorsResponse errors, HttpStatusCode statusCode = HttpStatusCode.BadRequest)
-        {
-            this.ResultObject = errors;
-            this.Success = false;
-            this.StatusCode = (int)statusCode;
-        }
-
-        public RequestHandlerResult(ErrorItemResponse error, int statusCode = 400)
-        {
-            this.ResultObject = new ErrorsResponse { Errors = new List<ErrorItemResponse> { error } };
-            this.Success = false;
-            this.StatusCode = statusCode;
-        }
-
-        public RequestHandlerResult(ErrorsResponse errors, int statusCode = 400)
-        {
-            this.ResultObject = errors;
-            this.Success = false;
-            this.StatusCode = statusCode;
-        }
+        public int StatusCode { get; set; }
 
         public bool IsSuccess() => this.Success;
 
         public object Result() => this.ResultObject;
+
+        internal void SetStatusCode(int statusCode) 
+            => this.StatusCode = statusCode;
+
+        internal void SetErrors(params ErrorResult[] errors)
+            => this.Errors = errors;
+
+        internal void SetResultErrorItems(params ErrorItemResponse[] errors)
+            => this.SetResultObject(new ErrorsResponse 
+            { 
+                Errors = errors.ToList()
+            });
+
+        internal void SetSucess()
+            => this.Success = true;
+
+        internal void SetFailure()
+            => this.Success = false;
+
+        internal void SetResultObject(object resultObject)
+            => this.ResultObject = resultObject;
+
+        internal void SetErrorMessage(string errorMessage)
+            => this.SetErrors(new ErrorResult(errorMessage));
     }
 }

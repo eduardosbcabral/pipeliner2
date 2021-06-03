@@ -2,6 +2,9 @@
 
 namespace PipelineR
 {
+    /// <summary>
+    /// Context class that is shared between the steps of a single or multiple pipelines.
+    /// </summary>
     [JsonConverter(typeof(ContextConverter))]
     public abstract class BaseContext
     {
@@ -14,6 +17,6 @@ namespace PipelineR
         public object Request { get; set; }
     
         public RequestHandlerResult Response { get; set; }
-        public string CurrentRequestHandleId { get; set; }
+        public string CurrentRequestHandlerId { get; set; }
     }
 }

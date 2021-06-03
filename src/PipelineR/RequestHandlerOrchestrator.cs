@@ -8,18 +8,23 @@
 
         public static RequestHandlerResult ExecuteHandler<TContext>(IRequestHandler<TContext> requestHandler, string requestHandlerId) where TContext : BaseContext
         {
-            requestHandler.Context.CurrentRequestHandleId = requestHandler.RequestHandleId();
+            requestHandler.Context.CurrentRequestHandlerId = requestHandler.RequestHandlerId();
 
             if (UseRequestHandlerId(requestHandlerId) &&
-                requestHandler.Context.CurrentRequestHandleId.Equals(requestHandlerId, System.StringComparison.InvariantCultureIgnoreCase) == false)
+                !requestHandler.Context.CurrentRequestHandlerId.Equals(requestHandlerId, System.StringComparison.InvariantCultureIgnoreCase))
+            {
                 return ((RequestHandler<TContext>)requestHandler).Next(requestHandlerId);
+            }
 
             if (requestHandler.Condition is null || requestHandler.Condition.IsSatisfied(requestHandler.Context))
+            {
                 return requestHandler.HandleRequest();
-            else
-                return ((RequestHandler<TContext>)requestHandler).Next();
+            }
+            
+            return ((RequestHandler<TContext>)requestHandler).Next();
         }
 
-        private static bool UseRequestHandlerId(string requestHandlerId) => string.IsNullOrWhiteSpace(requestHandlerId) == false;
+        private static bool UseRequestHandlerId(string requestHandlerId)
+            => !string.IsNullOrWhiteSpace(requestHandlerId);
     }
 }
